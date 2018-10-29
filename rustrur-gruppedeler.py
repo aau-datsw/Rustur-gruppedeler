@@ -1,15 +1,13 @@
-from math import exp
+from math import exp, log
 from random import random, randrange
 import csv
-import sys
 
 csv_file_datalogi = "Datalogi.csv"
 csv_file_software = "Software.csv"
 csv_new_file_datalogi = "GroupsDatalogi.csv"
 csv_new_file_software = "GroupsSoftware.csv"
-sys.setrecursionlimit(10000)
-max_iterations = 10000
-max_temperature = 10000
+max_iterations = 50000
+initial_temperature = 2000
 group_size_dat = 11
 group_size_sw = 17
 
@@ -49,7 +47,7 @@ def csv_writer(csv_new_file, groups):
     :param csv_new_file: Path to the new csv file
     :param groups: the list of groups
     """
-    with open(csv_new_file, "a+") as file:
+    with open(csv_new_file, "w+") as file:
         writer = csv.writer(file, delimiter=";")
         for group in groups:
             writer.writerow(["New group"])
@@ -70,9 +68,20 @@ def simulated_annealing(students, **params):
     best = current
     cost_best = similarity(best, **params)
 
-    for i in range(1, max_iterations - 1):
+    for i in range(1, max_iterations + 1):
+
+        if i % 100 == 0:
+            print("Iteration {}".format(i))
+
         next_state = permute_groups(current, **params)
-        temperature = calculate_temperature(i, max_temperature, **params)
+        temperature = calculate_temperature(i, initial_temperature, **params)
+
+        for group in next_state:
+            if contains_duplicates(group):
+                print("DUPLICATE!!!")
+
+        if current == next_state:
+            print("SHOULD NOT HAPPEN!")
 
         cost_cur = similarity(current, **params)
         cost_next = similarity(next_state, **params)
@@ -114,7 +123,7 @@ def permute_groups(groups, **kwargs):
     :param kwargs:
     :return: Return a new group
     """
-    groups_cpy = groups[:]
+    groups_cpy = [group[:] for group in groups]
 
     group1 = randrange(0, len(groups_cpy))
     group2 = randrange(0, len(groups_cpy))
@@ -131,7 +140,7 @@ def permute_groups(groups, **kwargs):
     groups_cpy[group2][group2_member] = temp
 
     if contains_duplicates(groups_cpy[group1]) or contains_duplicates(groups_cpy[group2]):
-        return permute_groups(groups_cpy, **kwargs)
+        return permute_groups(groups, **kwargs)
     else:
         return groups_cpy
 
@@ -139,30 +148,26 @@ def permute_groups(groups, **kwargs):
 def contains_duplicates(group):
     """
     Checks for duplicates in the groups
-    (Two duplicates are allowed, software was 24 P0 groups, and we needed 17 rustur groups)
     :param group: a list of groups
-    :return: True if more then 1 duplicate pr. team, else False
+    :return: True if a group
     """
     for idx, student in enumerate(group):
         for i in range(idx + 1, len(group)):
-            duplicates = 0
             if student.p0group == group[i].p0group:
-                duplicates += 1
-                if duplicates >= 2:
-                    return True
+                return True
 
     return False
 
 
-def calculate_temperature(iteration, max_temperature, **kwargs):
+def calculate_temperature(iteration, initial_temperature, **kwargs):
     """
     Linear cooling functions
     :param iteration: current iterations
-    :param max_temperature:
+    :param initial_temperature:
     :param kwargs:
     :return: new temperature
     """
-    return max_temperature - iteration
+    return initial_temperature / (1 + log(iteration + 1))
 
 
 def similarity(groups, **kwargs):
@@ -188,14 +193,12 @@ def pairwise_similarity(group1, group2):
     :param group2: Second group
     :return: the pairwise similarity between the two groups
     """
-    equal_students = 0
+    group1_p0 = map(lambda student: student.p0group, group1)
+    group2_p0 = map(lambda student: student.p0group, group2)
 
-    for student1 in group1:
-        for student2 in group2:
-            if student1.p0group == student2.p0group:
-                equal_students += 1
+    equal_students = len(set(group1_p0) & set(group2_p0))
 
-    return equal_students / min(len(group1), len(group2))
+    return (equal_students / min(len(group1), len(group2))) ** 2
 
 
 def calculate(students, grp_size):
@@ -209,7 +212,7 @@ def calculate(students, grp_size):
     for group in groups:
         if contains_duplicates(group):
             print("Duplicates! Rerunning")
-            calculate(students, grp_size)
+            # calculate(students, grp_size)
         else:
             print("No duplicates")
     return groups
